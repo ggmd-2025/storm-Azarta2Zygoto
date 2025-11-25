@@ -3,11 +3,9 @@ package stormTP.topology;
 import org.apache.storm.Config;
 import org.apache.storm.StormSubmitter;
 import org.apache.storm.topology.TopologyBuilder;
-import stormTP.operator.ExitBolt;
-import stormTP.operator.Exit2Bolt;
+import stormTP.operator.Exit3Bolt;
 import stormTP.operator.InputStreamSpout;
-import stormTP.operator.NothingBolt;
-import stormTP.operator.MyTortoiseBolt;
+import stormTP.operator.GiveRankBolt;
 
 /**
  * 
@@ -15,7 +13,7 @@ import stormTP.operator.MyTortoiseBolt;
  * Topologie test permettant d'écouter le Master Input 
  *
  */
-public class TopologyT1 {
+public class TopologyT3 {
 	
 	public static void main(String[] args) throws Exception {
 		int nbExecutors = 1;
@@ -29,11 +27,9 @@ public class TopologyT1 {
         /*Affectation à la topologie du spout*/
         builder.setSpout("masterStream", spout);
         /*Affectation à la topologie du bolt qui ne fait rien, il prendra en input le spout localStream*/
-        // builder.setBolt("nofilter", new NothingBolt(), nbExecutors).shuffleGrouping("masterStream");
-        builder.setBolt("nofilter", new MyTortoiseBolt(portOUTPUT), nbExecutors).shuffleGrouping("masterStream");
+        builder.setBolt("rang", new GiveRankBolt(portOUTPUT), nbExecutors).shuffleGrouping("masterStream");
         /*Affectation à la topologie du bolt qui émet le flux de sortie, il prendra en input le bolt nofilter*/
-        // builder.setBolt("exit", new ExitBolt(portOUTPUT), nbExecutors).shuffleGrouping("nofilter");
-        builder.setBolt("exit", new Exit2Bolt(portOUTPUT), nbExecutors).shuffleGrouping("nofilter");
+        builder.setBolt("exit", new Exit3Bolt(portOUTPUT), nbExecutors).shuffleGrouping("rang");
        
         /*Création d'une configuration*/
         Config config = new Config();

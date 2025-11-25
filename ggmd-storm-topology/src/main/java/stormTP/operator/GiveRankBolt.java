@@ -2,6 +2,9 @@ package stormTP.operator;
 
 import java.util.Map;
 import java.util.logging.Logger;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Comparator;
 import java.io.StringReader;
 
 import javax.json.Json;
@@ -23,7 +26,7 @@ import org.apache.storm.tuple.Tuple;
 import stormTP.stream.StreamEmiter;
 
 
-public class MyTortoiseBolt implements IRichBolt {
+public class GiveRankBolt implements IRichBolt {
 
 	private static final long serialVersionUID = 4262369370788107342L;
 	private static Logger logger = Logger.getLogger("ExitBolt");
@@ -32,7 +35,7 @@ public class MyTortoiseBolt implements IRichBolt {
     private static final int ALLOW_ID = 3;
 	StreamEmiter semit = null;
 	
-	public MyTortoiseBolt (int port) {
+	public GiveRankBolt (int port) {
 		this.port = port;
 		this.semit = new StreamEmiter(this.port);
 	}
@@ -42,7 +45,7 @@ public class MyTortoiseBolt implements IRichBolt {
 	 */
 	public void execute(Tuple t) {
         Object vf = null;
-		logger.info("[MyTortoiseBolt] EXEC");
+		logger.info("[GiveRankBolt] EXEC");
         try { vf = t.getValueByField("json"); } catch (Exception e) { collector.ack(t); return; }
         if (vf == null) { collector.ack(t); return; }
         String n = vf.toString();
@@ -62,9 +65,6 @@ public class MyTortoiseBolt implements IRichBolt {
 
                     int id = getIntSafely(r, "id", Integer.MIN_VALUE);
                     String idStr = getStringSafely(r, "id");
-
-                    boolean keep = (id != Integer.MIN_VALUE && id == ALLOW_ID) || ("3".equals(idStr));
-                    if (!keep) continue;
 
                     JsonObjectBuilder exit = Json.createObjectBuilder();
 
@@ -91,20 +91,55 @@ public class MyTortoiseBolt implements IRichBolt {
                     filteredBuilder.add(exit);
                 }
             }
+            JsonArray filteredArray = filteredBuilder.build();
+
+            // 1) Convert JsonArray to List<JsonObject>
+            List<JsonObject> list = new ArrayList<>();
+            for (JsonValue v : filteredArray) {
+                if (v.getValueType() == JsonValue.ValueType.OBJECT) {
+                    list.add((JsonObject) v);
+                }
+            }
+
+            // 2) Sort by "nbCellsParcourus"
+            list.sort(Comparator.comparingInt(o -> o.getInt("nbCellsParcourus")));
+
+            // 3) Create a new sorted builder
+            JsonArrayBuilder sortedBuilder = Json.createArrayBuilder();
+            list.forEach(sortedBuilder::add);
+
+            // 4) Use the sorted builder
+            JsonArray sortedArray = sortedBuilder.build();
+
+            // 5) Create corrected/ranked array
+            JsonArrayBuilder correctedBuilder = Json.createArrayBuilder();
+            int rank = 0;
+            for (JsonValue jv : sortedArray) {
+                JsonObject runnerObj = (JsonObject) jv;
+                JsonObjectBuilder newObj = Json.createObjectBuilder();
+                newObj.add("id", runnerObj.get("id"));
+                if (runnerObj.containsKey("top")) newObj.add("top", runnerObj.get("top"));
+                newObj.add("rang", ++rank);
+                if (runnerObj.containsKey("total")) newObj.add("total", runnerObj.get("total"));
+                newObj.add("maxcells", runnerObj.getInt("maxcells", 0));
+                correctedBuilder.add(newObj);
+            }
+
             JsonObjectBuilder outBuilder = Json.createObjectBuilder();
             for (String key : obj.keySet()) {
                 if ("runners".equals(key)) continue;
                 outBuilder.add(key, obj.get(key));
             }
-            outBuilder.add("runners", filteredBuilder);
+            outBuilder.add("runners", correctedBuilder);
 
             JsonObject outObj = outBuilder.build();
             String outStr = outObj.toString();
 
+            logger.info("[GiveRankBolt] Output JSON: " + outStr);
 			collector.emit(t, new org.apache.storm.tuple.Values(outStr));
             collector.ack(t);
         } catch (Exception e) {
-            logger.severe("[MyTortoiseBolt] Error: " + e.getMessage());
+            logger.severe("[GiveRankBolt] Error: " + e.getMessage());
             collector.fail(t);
         }
     }
