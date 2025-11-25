@@ -7,6 +7,7 @@ import org.apache.storm.topology.TopologyBuilder;
 import stormTP.operator.InputStreamSpout;
 import stormTP.operator.ConsumeTimeBolt;
 import stormTP.operator.ExitInLogBolt;
+import stormTP.operator.MyTortoiseBolt;
 
 
 public class TopologyE1 {
@@ -24,7 +25,8 @@ public class TopologyE1 {
         /*Affectation à la topologie du spout*/
         builder.setSpout("masterStream", spout);
         /* Opérateur qui consomme du temps */
-        builder.setBolt("consume", new ConsumeTimeBolt(), nbExecutors).shuffleGrouping("masterStream");
+        // builder.setBolt("consume", new ConsumeTimeBolt(), nbExecutors).shuffleGrouping("masterStream");
+        builder.setBolt("consume", new MyTortoiseBolt(portOUTPUT), nbExecutors).shuffleGrouping("masterStream");
         /* OutPut mis dans le log  */
         builder.setBolt("exit", new ExitInLogBolt(), nbExecutors).shuffleGrouping("consume");
            
